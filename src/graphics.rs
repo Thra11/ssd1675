@@ -65,10 +65,10 @@ where
         }
     }
 
-    fn set_pixel(&mut self, x: u32, y: u32, color: Color) {
+    fn set_pixel(&mut self, coord: Point, color: Color) {
         let (index, bit) = rotation(
-            x,
-            y,
+            coord.x as u32,
+            coord.y as u32,
             self.cols() as u32,
             self.rows() as u32,
             self.rotation(),
@@ -124,15 +124,15 @@ fn rotation(x: u32, y: u32, width: u32, height: u32, rotation: Rotation) -> (u32
     }
 }
 
-fn outside_display(x: u32, y: u32, width: u32, height: u32, rotation: Rotation) -> bool {
+fn outside_display(x: i32, y: i32, width: u32, height: u32, rotation: Rotation) -> bool {
     match rotation {
         Rotation::Rotate0 | Rotation::Rotate180 => {
-            if x >= width || y >= height {
+            if x as u32 >= width || y as u32 >= height {
                 return true;
             }
         }
         Rotation::Rotate90 | Rotation::Rotate270 => {
-            if y >= width || x >= height {
+            if y as u32 >= width || x as u32 >= height {
                 return true;
             }
         }
@@ -144,39 +144,48 @@ fn outside_display(x: u32, y: u32, width: u32, height: u32, rotation: Rotation) 
 #[cfg(feature = "graphics")]
 extern crate embedded_graphics;
 #[cfg(feature = "graphics")]
-use self::embedded_graphics::{drawable::Pixel, prelude::UnsignedCoord, Drawing};
+use self::embedded_graphics::{
+    drawable::Pixel,
+    prelude::Point,
+    prelude::Size,
+    DrawTarget
+};
 
 #[cfg(feature = "graphics")]
-impl<'a, I> Drawing<Color> for GraphicDisplay<'a, I>
+impl<'a, I> DrawTarget<Color> for GraphicDisplay<'a, I>
 where
     I: DisplayInterface,
 {
-    fn draw<T>(&mut self, item_pixels: T)
-    where
-        T: IntoIterator<Item = Pixel<Color>>,
+    fn draw_pixel(&mut self, pixel: Pixel<Color>) -> Result<(), Self::Error>
     {
-        for Pixel(UnsignedCoord(x, y), colour) in item_pixels {
-            if outside_display(
-                x,
-                y,
-                self.cols() as u32,
-                self.rows() as u32,
-                self.rotation(),
-            ) {
-                continue;
-            }
-
-            self.set_pixel(x, y, colour);
+        let Pixel(coord, colour) = pixel;
+        if !outside_display(
+            coord.x,
+            coord.y,
+            self.cols() as u32,
+            self.rows() as u32,
+            self.rotation(),
+        ) {
+            self.set_pixel(coord, colour);
         }
+
+        Ok(())
     }
+
+    fn size(&self) -> Size
+    {
+        Size::new(self.cols() as u32, self.rows() as u32)
+    }
+
+    type Error = core::convert::Infallible;
 }
 
 #[cfg(test)]
 mod tests {
-    use self::embedded_graphics::coord::Coord;
+    use self::embedded_graphics::geometry::Point;
     use self::embedded_graphics::prelude::*;
+    use self::embedded_graphics::style::PrimitiveStyleBuilder;
     use self::embedded_graphics::primitives::Rectangle;
-    use self::embedded_graphics::Drawing;
     use super::*;
     use {Builder, Color, Dimensions, Display, DisplayInterface, GraphicDisplay, Rotation};
 
@@ -278,11 +287,14 @@ mod tests {
             let mut display =
                 GraphicDisplay::new(build_mock_display(), &mut black_buffer, &mut red_buffer);
 
-            display.draw(
-                Rectangle::new(Coord::new(0, 0), Coord::new(2, 2))
-                    .stroke(Some(Color::White))
-                    .into_iter(),
-            );
+            let style = PrimitiveStyleBuilder::new()
+                .stroke_color(Color::White)
+                .stroke_width(1)
+                .build();
+
+            Rectangle::new(Point::new(0, 0), Point::new(2, 2))
+                .into_styled(style)
+                .draw(&mut display).unwrap();
         }
 
         #[rustfmt::skip]
@@ -305,11 +317,14 @@ mod tests {
             let mut display =
                 GraphicDisplay::new(build_mock_display(), &mut black_buffer, &mut red_buffer);
 
-            display.draw(
-                Rectangle::new(Coord::new(0, 0), Coord::new(2, 2))
-                    .stroke(Some(Color::Red))
-                    .into_iter(),
-            );
+            let style = PrimitiveStyleBuilder::new()
+                .stroke_color(Color::Red)
+                .stroke_width(1)
+                .build();
+
+            Rectangle::new(Point::new(0, 0), Point::new(2, 2))
+                .into_styled(style)
+                .draw(&mut display).unwrap();
         }
 
         #[rustfmt::skip]

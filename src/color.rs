@@ -11,7 +11,9 @@ extern crate embedded_graphics;
 #[cfg(feature = "graphics")]
 use self::embedded_graphics::prelude::*;
 #[cfg(feature = "graphics")]
-impl PixelColor for Color {}
+impl PixelColor for Color {
+    type Raw = ();
+}
 
 impl From<u8> for Color {
     fn from(value: u8) -> Self {
